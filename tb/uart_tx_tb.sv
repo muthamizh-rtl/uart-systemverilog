@@ -2,76 +2,70 @@
 
 module uart_tx_tb;
 
-    logic       clk;
-    logic       reset;
-    logic       tx_start;
-    logic [7:0] tx_data;
+logic clk;
+logic reset;
+logic tx_start;
+logic [7:0] tx_data;
+logic tx;
+logic tx_busy;
 
-    logic       tx;
-    logic       tx_busy;
+uart_tx #(
+    .CLOCK_FREQ(50_000_000),
+    .BAUD_RATE(9_600)
+) dut (
+    .clk(clk),
+    .reset(reset),
+    .tx_start(tx_start),
+    .tx_data(tx_data),
+    .tx(tx),
+    .tx_busy(tx_busy)
+);
 
-    // DUT
-    uart_tx #(
-        .CLOCK_FREQ(50_000_000),
-        .BAUD_RATE(9_600)
-    ) dut (
-        .clk      (clk),
-        .reset    (reset),
-        .tx_start (tx_start),
-        .tx_data  (tx_data),
-        .tx       (tx),
-        .tx_busy  (tx_busy)
-    );
+always #10 clk = ~clk;
 
-    // 50 MHz clock
-    initial begin
-        clk = 1'b0;
-        forever #10 clk = ~clk;
-    end
+task send_byte(input logic [7:0] data);
+begin
+    @(posedge clk);
 
-    // Test
-    initial begin
+    while (tx_busy)
+        @(posedge clk);
 
-        reset    = 1'b1;
-        tx_start = 1'b0;
-        tx_data  = 8'h00;
+    tx_data = data;
+    tx_start = 1'b1;
 
-        // Reset
-        #100;
-        reset = 1'b0;
+    @(posedge clk);
+    tx_start = 1'b0;
 
-        // Send 0x41 = ASCII 'A'
-        #100;
-        tx_data  = 8'h41;
-        tx_start = 1'b1;
+    $display("Sending data = 0x%02h", data);
 
-        #20;
-        tx_start = 1'b0;
+    wait (!tx_busy);
 
-        // Wait for transmission to start
-        wait (tx_busy == 1'b1);
+    $display("Completed data = 0x%02h", data);
+end
+endtask
 
-        $display("--------------------------------");
-        $display("UART TRANSMISSION STARTED");
-        $display("Data = 0x%h", tx_data);
-        $display("--------------------------------");
+initial begin
+    clk = 1'b0;
+    reset = 1'b1;
+    tx_start = 1'b0;
+    tx_data = 8'h00;
 
-        // Wait for transmission to finish
-        wait (tx_busy == 1'b0);
+    #100;
+    reset = 1'b0;
 
-        $display("--------------------------------");
-        $display("UART TRANSMISSION COMPLETED");
-        $display("TEST PASSED");
-        $display("--------------------------------");
+    $display("UART MULTI-BYTE TEST STARTED");
 
-        #100;
-        $finish;
-    end
+    send_byte(8'h41);
+    send_byte(8'h55);
+    send_byte(8'hAA);
+    send_byte(8'hFF);
+    send_byte(8'h00);
 
-    // Waveform dump
-    initial begin
-        $dumpfile("uart_tx.vcd");
-        $dumpvars(0, uart_tx_tb);
-    end
+    $display("UART MULTI-BYTE TEST COMPLETED");
+    $display("TEST PASSED");
+
+    #100;
+    $finish;
+end
 
 endmodule
